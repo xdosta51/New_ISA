@@ -119,6 +119,12 @@ char* send_request(char buffer[BUFFER], int msg_size, int *client_msg_size) {
         exit(1);
     }
     
+    struct timeval timeout;      
+    timeout.tv_sec = 4;
+    timeout.tv_usec = 0;
+    setsockopt(client_sock, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout));
+            
+
     client_i = sendto(client_sock,buffer,msg_size,0,res->ai_addr, res->ai_addrlen); //odeslani socketu na dns server
     if (client_i == -1) {
         std::cerr << "posilani packetu selhalo" << "\n";
@@ -135,10 +141,16 @@ char* send_request(char buffer[BUFFER], int msg_size, int *client_msg_size) {
         std::cerr << "selhalo getsockname()" << "\n";
         exit(1);
     }
-      
+    
     if ((client_i = recvfrom(client_sock,buffer, BUFFER,0,(struct sockaddr *) &from, &len)) == -1)  {   //prijeti paketu z dns serveru
-        std::cerr << "selhalo recvfrom()" << "\n";
-        exit(1);
+
+        buffer[2] |= 0x80; // nastaveni QR na 1
+        buffer[3] = (buffer[3] & 0xf0) | 0x02; // odeslani s flagem SERVFAIL
+
+        *client_msg_size = msg_size;
+        close(client_sock);
+        
+        return buffer;
     }
 
     *client_msg_size = client_i;
